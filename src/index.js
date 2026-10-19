@@ -20,6 +20,7 @@ import {
   DefaultGraph,
   Quad,
   Triple,
+  Sequence,
 
   termFromId,
   termToId,
@@ -49,6 +50,7 @@ export {
   DefaultGraph,
   Quad,
   Triple,
+  Sequence,
 
   termFromId,
   termToId,
@@ -79,6 +81,7 @@ export default {
   DefaultGraph,
   Quad,
   Triple,
+  Sequence,
 
   termFromId,
   termToId,

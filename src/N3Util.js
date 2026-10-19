@@ -23,6 +23,10 @@ export function isVariable(term) {
 }
 
 // Tests whether the given term represents a quad
+export function isSequence(term) {
+  return !!term && term.termType === 'Sequence';
+}
+
 export function isQuad(term) {
   return !!term && term.termType === 'Quad';
 }

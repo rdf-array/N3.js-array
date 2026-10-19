@@ -192,6 +192,8 @@ export default class N3Writer {
     switch (entity.termType) {
     case 'Quad':
       return this._encodeQuad(entity);
+    case 'Sequence':
+      return this._encodeSequence(entity);
     // Literal subjects are only valid in N3
     case 'Literal':
       return this._encodeLiteral(entity);
@@ -283,6 +285,8 @@ export default class N3Writer {
   // ### `_encodePredicate` represents a predicate
   _encodePredicate(predicate) {
     switch (predicate.termType) {
+    case 'Sequence':
+      return this._encodeSequence(predicate);
     case 'NamedNode':
       return predicate.value === rdf.type ? 'a' : this._encodeIriOrBlank(predicate);
     // Literal predicates are only valid in N3
@@ -298,11 +302,19 @@ export default class N3Writer {
     switch (object.termType) {
     case 'Quad':
       return this._encodeQuad(object);
+    case 'Sequence':
+      return this._encodeSequence(object);
     case 'Literal':
       return this._encodeLiteral(object);
     default:
       return this._encodeIriOrBlank(object);
     }
+  }
+
+  // ### `_encodeSequence` encodes a sequence term (RDF-): `(e1 e2 ...)`, `()` when empty
+  _encodeSequence(sequence) {
+    const contents = Array.from(sequence.elements, e => this._encodeObject(e));
+    return `(${contents.join(' ')})`;
   }
 
   // ### `_encodeQuad` encodes an RDF-star quad

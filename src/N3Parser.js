@@ -1,6 +1,6 @@
 // **N3Parser** parses N3 documents.
 import N3Lexer from './N3Lexer';
-import N3DataFactory from './N3DataFactory';
+import N3DataFactory, { Sequence } from './N3DataFactory';
 import namespaces from './IRIs';
 
 let blankNodePrefix = 0;
@@ -323,10 +323,55 @@ export default class N3Parser {
     if (parent.type === '<<') {
       return this._error('Unexpected list in reified triple', token);
     }
-    // Start a new list
+    // Start a new list: its items are collected on the context and become
+    // one sequence term when the list closes (RDF-)
     this._saveContext('list', this._graph, subject, predicate, object);
+    this._contextStack[this._contextStack.length - 1].items = [];
     this._subject = null;
     return this._readListItem;
+  }
+
+  // ### `_listContext` is the list being read
+  // (the innermost context, as items are added before any context of their own)
+  _listContext() {
+    return this._contextStack[this._contextStack.length - 1];
+  }
+
+  // ### `_sequence` creates the sequence term for a closed list
+  _sequence(items) {
+    return typeof this._factory.sequence === 'function' ? this._factory.sequence(items) : new Sequence(items);
+  }
+
+  // ### `_closeList` restores the context around a closed list and places its sequence
+  _closeList(token) {
+    const stack = this._contextStack, items = stack[stack.length - 1].items;
+    this._restoreContext('list', token);
+    const sequence = this._sequence(items);
+    // Was this list an item of a parent list?
+    if (stack.length !== 0 && stack[stack.length - 1].type === 'list') {
+      stack[stack.length - 1].items.push(sequence);
+      // In N3 mode, the sequence might be the start of a path;
+      // _readPath will restore the context and replace the item by the path's end
+      if (this._n3Mode) {
+        this._saveContext('item', this._graph, null, null, sequence);
+        this._subject = sequence, this._predicate = null;
+        return this._getPathReader(this._readListItem);
+      }
+      return this._readListItem;
+    }
+    // Was this list the parent's subject?
+    if (this._predicate === null) {
+      this._subject = sequence;
+      return this._n3Mode ? this._getPathReader(this._readPredicate) : this._readPredicate;
+    }
+    // Was this list the parent's predicate? (N3 only)
+    if (this._object === null) {
+      this._predicate = sequence;
+      return this._getPathReader(this._readObject, 'predicate');
+    }
+    // The list was the parent context's object
+    this._object = sequence;
+    return this._n3Mode ? this._getPathReader(this._getContextEndReader()) : this._getContextEndReader();
   }
 
   // ### `_readSubject` reads a quad's subject
@@ -642,166 +687,73 @@ export default class N3Parser {
   }
 
   // ### `_readListItem` reads items from a list
+  // RDF-: items are collected on the list context; `_closeList` makes the sequence
   _readListItem(token) {
-    let item = null,                      // The item of the list
-        list = null,                      // The list itself
-        next = this._readListItem;        // The next function to execute
-    const previousList = this._subject,   // The previous list that contains this list
-        stack = this._contextStack,       // The stack of parent contexts
-        parent = stack[stack.length - 1]; // The parent containing the current list
+    let item = null;                            // The item of the list
+    const stack = this._contextStack,
+        listContext = stack[stack.length - 1];  // The context of the list being read
 
     switch (token.type) {
     case '[':
-      // Stack the current list quad and start a new quad with a blank node as subject
-      this._saveContext('blank', this._graph,
-                        list = this._factory.blankNode(), this.RDF_FIRST,
-                        this._subject = item = this._factory.blankNode());
-      next = this._readBlankNodeHead;
-      break;
+      // A blank node property list: its blank node is the item;
+      // the quad it starts is read with that blank node as subject
+      item = this._factory.blankNode();
+      listContext.items.push(item);
+      this._saveContext('blank', this._graph, null, null, item);
+      this._subject = item;
+      return this._readBlankNodeHead;
     case '(':
-      // Stack the current list quad and start a new list
-      this._saveContext('list', this._graph,
-                        list = this._factory.blankNode(), this.RDF_FIRST, this.RDF_NIL);
+      // A nested list: its sequence becomes an item of this list when it closes
+      this._saveContext('list', this._graph, null, null, null);
+      stack[stack.length - 1].items = [];
       this._subject = null;
-      break;
+      return this._readListItem;
     case ')':
-      // Closing the list; restore the parent context
-      this._restoreContext('list', token);
-      // If this list is contained within a parent list, return the membership quad here.
-      // This will be `<parent list element> rdf:first <this list>.`.
-      if (stack.length !== 0 && stack[stack.length - 1].type === 'list') {
-        // In N3 mode, this list might be the start of a path
-        if (this._n3Mode) {
-          // Close this list's tail, as a path would alter the membership quad only
-          if (previousList !== null)
-            this._emit(previousList, this.RDF_REST, this.RDF_NIL, this._graph);
-          // Create a new context to read the path;
-          // _readPath will restore the context and output the membership quad
-          this._saveContext('item', this._graph, this._subject, this._predicate, this._object);
-          this._subject = this._object, this._predicate = null;
-          return this._getPathReader(this._readListItem);
-        }
-        this._emit(this._subject, this._predicate, this._object, this._graph);
-      }
-      // Was this list the parent's subject?
-      if (this._predicate === null) {
-        // The next token is the predicate
-        next = this._n3Mode ? this._getPathReader(this._readPredicate) : this._readPredicate;
-        // No list tail if this was an empty list
-        if (this._subject === this.RDF_NIL)
-          return next;
-      }
-      // Was this list the parent's predicate?
-      else if (this._object === null) {
-        // The next token is the object
-        next = this._getPathReader(this._readObject, 'predicate');
-        // No list tail if this was an empty list
-        if (this._predicate === this.RDF_NIL)
-          return next;
-      }
-      // The list was in the parent context's object
-      else {
-        next = this._getContextEndReader();
-        // In N3 mode, the list object might be the start of a path
-        if (this._n3Mode)
-          next = this._getPathReader(next);
-        // No list tail if this was an empty list
-        if (this._object === this.RDF_NIL)
-          return next;
-      }
-      // Close the list by making the head nil
-      list = this.RDF_NIL;
-      break;
+      return this._closeList(token);
     case 'literal':
       // Regular literal, can still get a datatype or language
       if (token.prefix.length === 0) {
         this._literalValue = token.value;
-        next = this._readListItemDataTypeOrLang;
+        return this._readListItemDataTypeOrLang;
       }
       // Pre-datatyped string literal (prefix stores the datatype)
-      else {
-        item = this._factory.literal(token.value, this._factory.namedNode(token.prefix));
-        next = this._getContextEndReader();
-      }
+      item = this._factory.literal(token.value, this._factory.namedNode(token.prefix));
       break;
     case '{':
-      // Start a new formula
+      // Start a new formula (N3): a blank node naming the formula's graph is the item
       if (!this._n3Mode)
         return this._error('Unexpected graph', token);
-      // The formula is an item of the list,
-      // so it must be linked in the list's graph before the graph changes
-      list = this._factory.blankNode();
       item = this._factory.blankNode();
-      // Is this the first element of the list?
-      if (previousList === null) {
-        // This list is either the subject or the object of its parent
-        if (parent.predicate === null)
-          parent.subject = list;
-        else
-          parent.object = list;
-      }
-      else {
-        // Continue the previous list with the current list
-        this._emit(previousList, this.RDF_REST, list, this._graph);
-      }
-      // Output the item
-      this._emit(list, this.RDF_FIRST, item, this._graph);
-      // Stack the current list quad and start the formula
-      this._saveContext('formula', this._graph, list, this.RDF_FIRST,
-                        this._graph = item);
+      listContext.items.push(item);
+      this._saveContext('formula', this._graph, null, null, item);
+      this._graph = item;
       this._subject = null;
       return this._readInFormulaContext;
     case '<<(':
     case '<<':
+      // A triple term or reified triple: `_readTripleTermTail` / `_readReifiedTripleTail`
+      // add the resulting term to this list
       if (!this._enterTripleTerm(token.type, null, null, token))
         return;
-      next = this._readSubject;
-      break;
+      return this._readSubject;
     default:
       if ((item = this._readEntity(token)) === undefined)
         return;
     }
 
-     // Create a new blank node if no item head was assigned yet
-    if (list === null)
-      this._subject = list = this._factory.blankNode();
-
-    // When reading a reified triple or triple term, store the list as subject in the stack, as this will be overridden when reading the triple.
-    if (token.type === '<<' || token.type === '<<(')
-      stack[stack.length - 1].subject = this._subject;
-
-    // Is this the first element of the list?
-    if (previousList === null) {
-      // The list is the subject of the parent
-      if (parent.predicate === null)
-        parent.subject = list;
-      // The list is the predicate of the parent
-      else if (parent.object === null)
-        parent.predicate = list;
-      // The list is the object of the parent
-      else
-        parent.object = list;
+    // Add the item to the list
+    listContext.items.push(item);
+    // In N3 mode, the item might be a path
+    if (this._n3Mode && (token.type === 'IRI' || token.type === 'prefixed' ||
+                         token.type === 'var' || token.type === 'blank' ||
+                         token.type === 'literal')) {
+      // Create a new context to add the item's path;
+      // _readPath will restore the context and continue the list
+      this._saveContext('item', this._graph, null, null, item);
+      this._subject = item, this._predicate = null;
+      return this._getPathReader(this._readListItem);
     }
-    else {
-      // Continue the previous list with the current list
-      this._emit(previousList, this.RDF_REST, list, this._graph);
-    }
-    // If an item was read, add it to the list
-    if (item !== null) {
-      // In N3 mode, the item might be a path
-      if (this._n3Mode && (token.type === 'IRI' || token.type === 'prefixed' ||
-                           token.type === 'var' || token.type === 'blank' ||
-                           token.type === 'literal')) {
-        // Create a new context to add the item's path
-        this._saveContext('item', this._graph, list, this.RDF_FIRST, item);
-        this._subject = item, this._predicate = null;
-        // _readPath will restore the context and output the item
-        return this._getPathReader(this._readListItem);
-      }
-      // Output the item
-      this._emit(list, this.RDF_FIRST, item, this._graph);
-    }
-    return next;
+    return this._readListItem;
   }
 
   // ### `_readDataTypeOrLang` reads an _optional_ datatype or language
@@ -941,16 +893,19 @@ export default class N3Parser {
       // If this literal was part of a list, defer writing the item;
       // _readPath will then restore the context and output it
       if (listItem) {
-        this._saveContext('item', this._graph, this._subject, this.RDF_FIRST, this._object);
+        this._listContext().items.push(this._object);
+        this._saveContext('item', this._graph, null, null, this._object);
         this._subject = this._object, this._predicate = null;
         return this._getPathEndReader(token, this._readListItem);
       }
       return this._getPathEndReader(token, this._getContextEndReader());
     }
-    // If this literal was part of a list, write the item
+    // If this literal was part of a list, add the item to the list
     // (we could also check the context stack, but passing in a flag is faster)
-    if (listItem)
-      this._emit(this._subject, this.RDF_FIRST, this._object, this._graph);
+    if (listItem) {
+      this._listContext().items.push(this._object);
+      this._object = null;
+    }
     // If the token was consumed, continue with the rest of the input
     if (token === null)
       return this._getContextEndReader();
@@ -1244,14 +1199,15 @@ export default class N3Parser {
     default:
       const afterPath = this._afterPath;
       const stack = this._contextStack, parent = stack.length && stack[stack.length - 1];
-      // If we were reading a list item, we still need to output it
+      // If we were reading a list item, the path's end is the item
       if (parent && parent.type === 'item') {
-        // The list item is the remaining subejct after reading the path
+        // The list item is the remaining subject after reading the path
         const item = this._subject;
         // Switch back to the context of the list
         this._restoreContext('item', token);
-        // Output the list item
-        this._emit(this._subject, this.RDF_FIRST, item, this._graph);
+        // Replace the item that was added when the path started
+        const items = this._listContext().items;
+        items[items.length - 1] = item;
       }
       this._afterPath = null;
       this._pathPosition = null;
@@ -1307,11 +1263,11 @@ export default class N3Parser {
     this._restoreContext('<<(', token);
     this._tripleTermDepth--;
 
-    // If we're in a list, continue processing that list
+    // If we're in a list, the triple term is an item of that list
     const stack = this._contextStack, parent = stack.length && stack[stack.length - 1];
     if (parent && parent.type === 'list') {
-      this._emit(this._subject, this.RDF_FIRST, quad, this._graph);
-      return this._getContextEndReader();
+      parent.items.push(quad);
+      return this._readListItem;
     }
     // If the triple was the subject, continue by reading the predicate.
     if (this._subject === null) {
@@ -1343,11 +1299,11 @@ export default class N3Parser {
     this._restoreContext('<<', token);
     this._tripleTermDepth--;
 
-    // // If we're in a list, continue processing that list
+    // If we're in a list, the reifier is an item of that list
     const stack = this._contextStack, parent = stack.length && stack[stack.length - 1];
     if (parent && parent.type === 'list') {
-      this._emit(this._subject, this.RDF_FIRST, reifier, this._graph);
-      return this._getContextEndReader();
+      parent.items.push(reifier);
+      return this._readListItem;
     }
     // If the triple was the subject, continue by reading the predicate.
     else if (this._subject === null) {

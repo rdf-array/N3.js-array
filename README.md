@@ -1,3 +1,34 @@
+<img src=".github/rdf-array-logo.png" alt="[N3.js]" width="96" align="right">
+
+# N3.js-array: N3.js with RDF sequences
+
+**RDF-** fork of [N3.js](https://github.com/rdfjs/N3.js): the RDF data model gains a fifth
+kind of term, the **sequence**. `(1 2)` in Turtle, TriG, N-Triples and N-Quads is one
+term holding its elements, not a ladder of `rdf:first`/`rdf:rest` blank nodes; `()` is the
+empty sequence, not `rdf:nil`. Sequences nest and may be subjects, objects, and (in N3)
+predicates.
+
+```js
+const { Parser, Writer, DataFactory } = require('n3');
+const [quad] = new Parser().parse('<http://x> <http://p> (1 (2 3) ()).');
+quad.object.termType;            // 'Sequence'
+quad.object.elements.length;     // 3
+quad.object.elements[1].elements[0].value; // '2'
+DataFactory.sequence([DataFactory.literal(1), DataFactory.literal(2)]).equals(
+  new Parser().parse('<http://x> <http://p> (1 2).')[0].object);   // true
+```
+
+* `Sequence` (`termType: 'Sequence'`, `elements`, `length`, `value`) is exported; `DataFactory.sequence(elements)` creates one;
+  `Util.isSequence(term)`, `termToId`/`termFromId` and the `Store` index sequences like any term (`(["id",...])` ids).
+* `Writer` writes sequences as `( ... )` in every format; `writer.list()` still returns the same text.
+* Legacy data with explicit `rdf:first`/`rdf:rest` triples is untouched: it parses and writes as plain triples,
+  and `Store.extractLists()` still reads ladders. Nothing turns a ladder into a sequence or back.
+* The branch is `rdf-sequences`, from N3.js v2.13.12. Changed: `N3DataFactory`, `N3Parser` (`_readList`,
+  `_readListItem`, `_closeList`), `N3Lexer` (`(`/`)` in line mode), `N3Writer`, `N3Util`, `index`; the tests'
+  list expectations are folded into `seq(...)` terms and `test/Sequence-test.js` is new.
+
+---
+
 # Lightning fast, asynchronous, streaming RDF for JavaScript
 [![Build Status](https://github.com/rdfjs/n3.js/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rdfjs/N3.js/actions)
 [![Coverage Status](https://coveralls.io/repos/github/rdfjs/N3.js/badge.svg)](https://coveralls.io/github/rdfjs/N3.js)

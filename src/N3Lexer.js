@@ -587,11 +587,18 @@ export default class N3Lexer {
           type = ')>>', matchLength = 3;
           break;
         }
+        // RDF-: sequences are terms in every syntax, N-Triples and N-Quads included
+        matchLength = 1;
+        type = firstChar;
+        break;
+      case '(':
+        matchLength = 1;
+        type = firstChar;
+        break;
       case ',':
       case ';':
       case '[':
       case ']':
-      case '(':
       case '}':
       case '~':
         if (!this._lineMode) {

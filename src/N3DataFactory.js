@@ -24,6 +24,7 @@ const DataFactory = {
   triple: quad,
   fromTerm,
   fromQuad,
+  sequence,
 };
 export default DataFactory;
 
@@ -248,6 +249,60 @@ export class DefaultGraph extends Term {
 // ## DefaultGraph singleton
 DEFAULTGRAPH = new DefaultGraph();
 
+// ## Sequence constructor
+// RDF-: a sequence is an ordered collection of terms that is itself a term.
+// `(1 2)` in Turtle is one object holding the two literals; there are no
+// rdf:first/rdf:rest triples and `()` is the empty sequence, not rdf:nil.
+export class Sequence extends Term {
+  // ### Creates a sequence of the given terms (any RDF/JS terms)
+  constructor(elements) {
+    const elems = Array.from(elements || []);
+    // The id lists the elements' ids, so equal sequences have equal ids
+    super(`(${JSON.stringify(elems.map(e => termToId(e)))})`);
+    this._elements = Object.freeze(elems);
+  }
+
+  // ### The term type of this term
+  get termType() {
+    return 'Sequence';
+  }
+
+  // ### The elements of this sequence, in order
+  get elements() {
+    return this._elements;
+  }
+
+  // ### The number of elements
+  get length() {
+    return this._elements.length;
+  }
+
+  // ### Returns whether this object represents the same sequence as the other
+  equals(other) {
+    if (other instanceof Term)
+      return this.id === other.id && this.termType === other.termType;
+    if (!other || other.termType !== 'Sequence' || !other.elements)
+      return false;
+    const elems = this._elements, others = other.elements;
+    if (elems.length !== others.length)
+      return false;
+    for (let i = 0; i < elems.length; i++) {
+      if (!elems[i].equals(others[i]))
+        return false;
+    }
+    return true;
+  }
+
+  // ### Returns a plain object representation of this sequence
+  toJSON() {
+    return {
+      termType: this.termType,
+      value:    this.value,
+      elements: this._elements.map(e => e.toJSON ? e.toJSON() : { termType: e.termType, value: e.value }),
+    };
+  }
+}
+
 // ### Constructs a term from the given internal string ID
 // The third 'nested' parameter of this function is to aid
 // with recursion over nested terms. It should not be used
@@ -291,6 +346,11 @@ export function termFromId(id, factory, nested) {
     }
     return factory.literal(id.substr(1, endPos - 1),
             languageOrDatatype);
+  case '(': {
+    // RDF-: a sequence, as the JSON array of its elements' ids
+    const elements = JSON.parse(id.substr(1, id.length - 2)).map(e => termFromId(e, factory));
+    return typeof factory.sequence === 'function' ? factory.sequence(elements) : new Sequence(elements);
+  }
   case '[':
     id = JSON.parse(id);
     break;
@@ -336,6 +396,9 @@ export function termToId(term, nested) {
   case 'Literal':      return `"${term.value}"${
     term.language ? `@${term.language}${term.direction ? `--${term.direction}` : ''}` :
       (term.datatype && term.datatype.value !== xsd.string ? `^^${term.datatype.value}` : '')}`;
+  case 'Sequence':
+    // RDF-: a sequence, as the JSON array of its elements' ids
+    return `(${JSON.stringify(Array.from(term.elements, e => termToId(e)))})`;
   case 'Quad':
     const res = [
       termToId(term.subject, true),
@@ -490,6 +553,11 @@ function quad(subject, predicate, object, graph) {
   return new Quad(subject, predicate, object, graph);
 }
 
+// ### Creates a sequence (RDF-)
+function sequence(elements) {
+  return new Sequence(elements);
+}
+
 export function fromTerm(term) {
   if (term instanceof Term)
     return term;
@@ -503,6 +571,7 @@ export function fromTerm(term) {
   case 'Literal':      return literal(term.value, !term.language ? term.datatype :
     term.direction ? { language: term.language, direction: term.direction } : term.language);
   case 'Quad':         return fromQuad(term);
+  case 'Sequence':     return sequence(Array.from(term.elements, fromTerm));
   default:             throw new Error(`Unexpected termType: ${term.termType}`);
   }
 }
