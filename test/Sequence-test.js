@@ -24,7 +24,7 @@ describe('Sequence', () => {
     it('should be empty when created without elements', () => {
       expect(new Sequence().length).toBe(0);
       expect(sequence().elements).toEqual([]);
-      expect(sequence().value).toBe('([])');
+      expect(sequence().value).toBe('()');
     });
 
     it('should have termType Sequence', () => {
@@ -38,8 +38,19 @@ describe('Sequence', () => {
     });
 
     it('should have a value that lists its elements', () => {
-      expect(seq.value).toBe('(["http://a","\\"x\\"","\\"1\\"^^http://www.w3.org/2001/XMLSchema#integer"])');
-      expect(seq.id).toBe(seq.value);
+      expect(seq.value).toBe('(<http://a> "x" "1"^^<http://www.w3.org/2001/XMLSchema#integer>)');
+      expect(seq.id).toBe('(["http://a","\\"x\\"","\\"1\\"^^http://www.w3.org/2001/XMLSchema#integer"])');
+    });
+
+    it('should spell every kind of element like N-Triples in its value', () => {
+      const all = new Sequence([
+        blankNode('b'), DataFactory.variable('v'), DataFactory.defaultGraph(),
+        literal('q"b\\s\nn\rr'), literal('x', 'en'), literal('x', { language: 'en', direction: 'ltr' }),
+        new Sequence([namedNode('http://a'), new Sequence()]),
+        quad(namedNode('s'), namedNode('p'), literal('o')),
+        quad(namedNode('s'), namedNode('p'), literal('o'), namedNode('g')),
+      ]);
+      expect(all.value).toBe('(_:b ?v  "q\\"b\\\\s\\nn\\rr" "x"@en "x"@en--ltr (<http://a> ()) <<<s> <p> "o">> <<<s> <p> "o" <g>>>)');
     });
 
     it('should equal a sequence of equal elements', () => {
@@ -87,7 +98,7 @@ describe('Sequence', () => {
     it('should have a JSON representation', () => {
       expect(new Sequence([literal('x')]).toJSON()).toEqual({
         termType: 'Sequence',
-        value: '(["\\"x\\""])',
+        value: '("x")',
         elements: [{ termType: 'Literal', value: 'x', language: '', direction: '', datatype: { termType: 'NamedNode', value: 'http://www.w3.org/2001/XMLSchema#string' } }],
       });
     });
@@ -99,7 +110,7 @@ describe('Sequence', () => {
     it('should have a JSON representation listing the elements', () => {
       expect(new Sequence([foreign, literal('1')]).toJSON()).toEqual({
         termType: 'Sequence',
-        value: '(["http://example.org/a","\\"1\\""])',
+        value: '(<http://example.org/a> "1")',
         elements: [
           { termType: 'NamedNode', value: 'http://example.org/a' },
           { termType: 'Literal', value: '1', language: '', direction: '', datatype: { termType: 'NamedNode', value: 'http://www.w3.org/2001/XMLSchema#string' } },
