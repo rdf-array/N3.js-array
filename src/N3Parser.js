@@ -324,7 +324,7 @@ export default class N3Parser {
       return this._error('Unexpected list in reified triple', token);
     }
     // Start a new list: its items are collected on the context and become
-    // one sequence term when the list closes (RDF-)
+    // one sequence term when the list closes (rdf-array)
     this._saveContext('list', this._graph, subject, predicate, object);
     this._contextStack[this._contextStack.length - 1].items = [];
     this._subject = null;
@@ -687,7 +687,7 @@ export default class N3Parser {
   }
 
   // ### `_readListItem` reads items from a list
-  // RDF-: items are collected on the list context; `_closeList` makes the sequence
+  // rdf-array: items are collected on the list context; `_closeList` makes the sequence
   _readListItem(token) {
     let item = null;                            // The item of the list
     const stack = this._contextStack,

@@ -6,7 +6,7 @@ import {
 
 const { namedNode, literal, blankNode, quad, sequence } = DataFactory;
 
-// RDF-: a sequence is an ordered collection of terms that is itself a term.
+// rdf-array: a sequence is an ordered collection of terms that is itself a term.
 describe('Sequence', () => {
   describe('The Sequence module', () => {
     it('should be a function', () => {

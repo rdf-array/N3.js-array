@@ -311,7 +311,7 @@ export default class N3Writer {
     }
   }
 
-  // ### `_encodeSequence` encodes a sequence term (RDF-): `(e1 e2 ...)`, `()` when empty
+  // ### `_encodeSequence` encodes a sequence term (rdf-array): `(e1 e2 ...)`, `()` when empty
   _encodeSequence(sequence) {
     const contents = Array.from(sequence.elements, e => this._encodeObject(e));
     return `(${contents.join(' ')})`;

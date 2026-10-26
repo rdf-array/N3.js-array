@@ -255,7 +255,7 @@ function escapeLiteralChar(char) {
   return literalEscapes[char];
 }
 
-// ### Returns the N-Triples-style spelling of a term, used in a sequence's value (RDF-)
+// ### Returns the N-Triples-style spelling of a term, used in a sequence's value (rdf-array)
 function termToValueString(term) {
   switch (term.termType) {
   case 'NamedNode':    return `<${term.value}>`;
@@ -274,7 +274,7 @@ function termToValueString(term) {
 }
 
 // ## Sequence constructor
-// RDF-: a sequence is an ordered collection of terms that is itself a term.
+// rdf-array: a sequence is an ordered collection of terms that is itself a term.
 // `(1 2)` in Turtle is one object holding the two literals; there are no
 // rdf:first/rdf:rest triples and `()` is the empty sequence, not rdf:nil.
 export class Sequence extends Term {
@@ -296,7 +296,7 @@ export class Sequence extends Term {
     return this._elements;
   }
 
-  // ### The N-Triples-style spelling `(e1 e2 ...)` of the sequence, the same across the RDF- libraries
+  // ### The N-Triples-style spelling `(e1 e2 ...)` of the sequence, the same across the rdf-array libraries
   get value() {
     return `(${this._elements.map(termToValueString).join(' ')})`;
   }
@@ -376,7 +376,7 @@ export function termFromId(id, factory, nested) {
     return factory.literal(id.substr(1, endPos - 1),
             languageOrDatatype);
   case '(': {
-    // RDF-: a sequence, as the JSON array of its elements' ids
+    // rdf-array: a sequence, as the JSON array of its elements' ids
     const elements = JSON.parse(id.substr(1, id.length - 2)).map(e => termFromId(e, factory));
     return typeof factory.sequence === 'function' ? factory.sequence(elements) : new Sequence(elements);
   }
@@ -426,7 +426,7 @@ export function termToId(term, nested) {
     term.language ? `@${term.language}${term.direction ? `--${term.direction}` : ''}` :
       (term.datatype && term.datatype.value !== xsd.string ? `^^${term.datatype.value}` : '')}`;
   case 'Sequence':
-    // RDF-: a sequence, as the JSON array of its elements' ids
+    // rdf-array: a sequence, as the JSON array of its elements' ids
     return `(${JSON.stringify(Array.from(term.elements, e => termToId(e)))})`;
   case 'Quad':
     const res = [
@@ -582,7 +582,7 @@ function quad(subject, predicate, object, graph) {
   return new Quad(subject, predicate, object, graph);
 }
 
-// ### Creates a sequence (RDF-)
+// ### Creates a sequence (rdf-array)
 function sequence(elements) {
   return new Sequence(elements);
 }

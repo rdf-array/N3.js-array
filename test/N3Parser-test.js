@@ -3845,7 +3845,7 @@ describe('Parser', () => {
 
       // A term of depth 0 is a plain IRI;
       // a term of depth n is a two-element list of an IRI and a term of depth n - 1.
-      // RDF-: a list is one sequence term, so a statement is always one quad
+      // rdf-array: a list is one sequence term, so a statement is always one quad
       function nested(depth, name) {
         return depth === 0 ? `<${name}>` : `(<${name}${depth}> ${nested(depth - 1, name)})`;
       }
@@ -4877,7 +4877,7 @@ describe('Parser', () => {
 
     it('limits triple terms in lists', () => {
       const parser = new Parser({ maxTripleTermDepth: 3 });
-      expect(parser.parse(nestedListItem(3))).toHaveLength(1);  // RDF-: the list is one sequence term
+      expect(parser.parse(nestedListItem(3))).toHaveLength(1);  // rdf-array: the list is one sequence term
       expect(() => parser.parse(nestedListItem(4)))
         .toThrow('Triple terms nested deeper than 3 levels on line 1.');
       expect(() => new Parser({ maxTripleTermDepth: 0 }).parse(nestedListItem(1)))
@@ -5606,7 +5606,7 @@ function mapToQuad(item) {
   return new Quad(item[0], item[1], item[2], item[3]);
 }
 
-// RDF-: a list is one sequence term. Items are ids (relative IRIs resolved
+// rdf-array: a list is one sequence term. Items are ids (relative IRIs resolved
 // against the base), arrays (quads), or terms.
 function seq(...items) {
   return DF.sequence(items.map(t => {
