@@ -26,6 +26,13 @@ DataFactory.sequence([DataFactory.literal(1), DataFactory.literal(2)]).equals(
 * The branch is `rdf-sequences`, from N3.js v2.13.12. Changed: `N3DataFactory`, `N3Parser` (`_readList`,
   `_readListItem`, `_closeList`), `N3Lexer` (`(`/`)` in line mode), `N3Writer`, `N3Util`, `index`; the tests'
   list expectations are folded into `seq(...)` terms and `test/Sequence-test.js` is new.
+* `npm run spec` runs the W3C RDF suites from [rdf-tests-array](https://github.com/rdf-array/rdf-tests-array)
+  (their expectations spell collections as sequences) and the shared
+  [rdf-tests-contrib](https://github.com/rdf-array/rdf-tests-contrib) Turtle, TriG, N-Triples and N-Quads
+  tests, through the parser and a write round trip, with
+  [rdf-test-suite-array](https://github.com/rdf-array/rdf-test-suite-array), which reads and compares
+  sequences; `scripts/fetch-rdf-array-tests.sh` fetches both suites. Every suite passes; the N3 suite's
+  `path2.n3`, whose expectation is a ladder, is skipped.
 
 ---
 

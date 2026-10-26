@@ -9,3 +9,4 @@ coverage
 perf/data/*.trig
 
 # RDF-: lib/ (the node build) is committed, so that a git install works under yarn 1 (which runs no prepare script)
+.rdf-array-tests

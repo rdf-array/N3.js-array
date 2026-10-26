@@ -45,7 +45,7 @@
     "playwright": "^1.61.1",
     "pre-commit": "^2.0.0",
     "rdf-isomorphic": "^2.0.0",
-    "rdf-test-suite": "^2.1.4",
+    "rdf-test-suite": "github:rdf-array/rdf-test-suite-array#rdf-sequences",
     "streamify-string": "^1.0.1"
   },
   "overrides": {
