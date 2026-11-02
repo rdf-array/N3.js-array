@@ -17,4 +17,4 @@ fetch() {
 }
 
 fetch rdf-tests-array rdf-sequences
-fetch rdf-tests-contrib main
+fetch rdf-tests-contrib rdf-undef

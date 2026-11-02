@@ -26,6 +26,11 @@ DataFactory.sequence([DataFactory.literal(1), DataFactory.literal(2)]).equals(
 * The branch is `rdf-sequences`, from N3.js v2.13.12. Changed: `N3DataFactory`, `N3Parser` (`_readList`,
   `_readListItem`, `_closeList`), `N3Lexer` (`(`/`)` in line mode), `N3Writer`, `N3Util`, `index`; the tests'
   list expectations are folded into `seq(...)` terms and `test/Sequence-test.js` is new.
+* **rdf-undef** (branch `rdf-undef`, [rdf-undef.md](https://github.com/rdf-array/rdf-array/blob/rdf-undef/docs/rdf-undef.md)):
+  Turtle, TriG, N-Triples and N-Quads read `undef`, in any case, as a member of `( … )` at any depth and nowhere else; `undef:x`
+  stays a prefixed name. `Undef` (`termType: 'Undef'`, id `!undef`) is one object, `DataFactory.undef()`; `DataFactory.quad`
+  refuses it, `Sequence.value` and the `Writer` spell it `undef`, `Util.isUndef` tests it, and the `Store` indexes a sequence
+  holding it like any term. Status: done; the `undef-*` cases of rdf-tests-contrib (branch `rdf-undef`) run under `npm run spec`.
 * `npm run spec` runs the W3C RDF suites from [rdf-tests-array](https://github.com/rdf-array/rdf-tests-array)
   (their expectations spell collections as sequences) and the shared
   [rdf-tests-contrib](https://github.com/rdf-array/rdf-tests-contrib) Turtle, TriG, N-Triples and N-Quads

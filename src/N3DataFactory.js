@@ -25,6 +25,7 @@ const DataFactory = {
   fromTerm,
   fromQuad,
   sequence,
+  undef,
 };
 export default DataFactory;
 
@@ -273,6 +274,26 @@ function termToValueString(term) {
   }
 }
 
+// ## Undef constructor
+// rdf-undef: the empty slot of a sequence, `( 1 undef 3 )`. It holds a position and no value:
+// an element of a sequence and nothing else, so a quad refuses it. There is one, UNDEF.
+export class Undef extends Term {
+  constructor() {
+    super('!undef');
+  }
+
+  // ### The term type of this term
+  get termType() {
+    return 'Undef';
+  }
+
+  // ### The spelling of a slot
+  get value() {
+    return 'undef';
+  }
+}
+export const UNDEF = new Undef();
+
 // ## Sequence constructor
 // rdf-array: a sequence is an ordered collection of terms that is itself a term.
 // `(1 2)` in Turtle is one object holding the two literals; there are no
@@ -346,6 +367,9 @@ export function termFromId(id, factory, nested) {
 
   // Identify the term type based on the first character
   switch (id[0]) {
+  case '!':
+    // rdf-undef: the empty slot, as an element of a sequence's id
+    return typeof factory.undef === 'function' ? factory.undef() : UNDEF;
   case '?':
     return factory.variable(id.substr(1));
   case '_':
@@ -422,6 +446,7 @@ export function termToId(term, nested) {
   case 'BlankNode':    return `_:${term.value}`;
   case 'Variable':     return `?${term.value}`;
   case 'DefaultGraph': return '';
+  case 'Undef':        return UNDEF.id;
   case 'Literal':      return `"${term.value}"${
     term.language ? `@${term.language}${term.direction ? `--${term.direction}` : ''}` :
       (term.datatype && term.datatype.value !== xsd.string ? `^^${term.datatype.value}` : '')}`;
@@ -579,12 +604,24 @@ function defaultGraph() {
 
 // ### Creates a quad
 function quad(subject, predicate, object, graph) {
+  // rdf-undef: a slot is an element of a sequence and nothing else
+  if (isSlot(subject) || isSlot(predicate) || isSlot(object) || isSlot(graph))
+    throw new Error('undef is only a member of a sequence, not a term of a quad');
   return new Quad(subject, predicate, object, graph);
+}
+
+function isSlot(term) {
+  return !!term && term.termType === 'Undef';
 }
 
 // ### Creates a sequence (rdf-array)
 function sequence(elements) {
   return new Sequence(elements);
+}
+
+// ### Returns the empty slot of a sequence (rdf-undef)
+function undef() {
+  return UNDEF;
 }
 
 export function fromTerm(term) {
@@ -601,6 +638,7 @@ export function fromTerm(term) {
     term.direction ? { language: term.language, direction: term.direction } : term.language);
   case 'Quad':         return fromQuad(term);
   case 'Sequence':     return sequence(Array.from(term.elements, fromTerm));
+  case 'Undef':        return UNDEF;
   default:             throw new Error(`Unexpected termType: ${term.termType}`);
   }
 }

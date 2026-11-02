@@ -1,6 +1,6 @@
 // **N3Parser** parses N3 documents.
 import N3Lexer from './N3Lexer';
-import N3DataFactory, { Sequence } from './N3DataFactory';
+import N3DataFactory, { Sequence, UNDEF } from './N3DataFactory';
 import namespaces from './IRIs';
 
 let blankNodePrefix = 0;
@@ -710,6 +710,10 @@ export default class N3Parser {
       return this._readListItem;
     case ')':
       return this._closeList(token);
+    case 'undef':
+      // The empty slot of a sequence (rdf-undef): an element, and nowhere else a term
+      listContext.items.push(typeof this._factory.undef === 'function' ? this._factory.undef() : UNDEF);
+      return this._readListItem;
     case 'literal':
       // Regular literal, can still get a datatype or language
       if (token.prefix.length === 0) {

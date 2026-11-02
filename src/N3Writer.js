@@ -204,6 +204,9 @@ export default class N3Writer {
 
   // ### `_encodeIriOrBlank` represents an IRI or blank node
   _encodeIriOrBlank(entity) {
+    // rdf-undef: a slot is written only as a member of a sequence
+    if (entity.termType === 'Undef')
+      throw new Error('undef is only a member of a sequence');
     // A blank node or list is represented as-is
     if (entity.termType !== 'NamedNode') {
       // If it is a list head, pretty-print it
@@ -313,8 +316,14 @@ export default class N3Writer {
 
   // ### `_encodeSequence` encodes a sequence term (rdf-array): `(e1 e2 ...)`, `()` when empty
   _encodeSequence(sequence) {
-    const contents = Array.from(sequence.elements, e => this._encodeObject(e));
+    // rdf-undef: a slot is written only here, as a member of a sequence
+    const contents = Array.from(sequence.elements, e => this._encodeMember(e));
     return `(${contents.join(' ')})`;
+  }
+
+  // ### `_encodeMember` encodes a member of a sequence or list
+  _encodeMember(member) {
+    return member.termType === 'Undef' ? 'undef' : this._encodeObject(member);
   }
 
   // ### `_encodeQuad` encodes an RDF-star quad
@@ -449,7 +458,7 @@ export default class N3Writer {
   list(elements) {
     const length = elements && elements.length || 0, contents = new Array(length);
     for (let i = 0; i < length; i++)
-      contents[i] = this._encodeObject(elements[i]);
+      contents[i] = this._encodeMember(elements[i]);
     return new SerializedTerm(`(${contents.join(' ')})`);
   }
 

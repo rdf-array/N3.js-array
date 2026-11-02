@@ -21,6 +21,7 @@ import {
   Quad,
   Triple,
   Sequence,
+  Undef,
 
   termFromId,
   termToId,
@@ -51,6 +52,7 @@ export {
   Quad,
   Triple,
   Sequence,
+  Undef,
 
   termFromId,
   termToId,
@@ -82,6 +84,7 @@ export default {
   Quad,
   Triple,
   Sequence,
+  Undef,
 
   termFromId,
   termToId,

@@ -150,6 +150,7 @@ function isValidCodePoint(charCode) {
 }
 
 const lineModeRegExps = {
+  _undef: true,
   _iri: true,
   _unescapedIri: true,
   _simpleQuotedString: true,
@@ -205,6 +206,7 @@ export default class N3Lexer {
     this._boolean = /(?:true|false)(?=[.,;!\^\s#()\[\]\{\}"'<>])/y;
     this._atKeyword = /@[a-z]+(?=[\s#<:"'.])/iy;
     this._keyword = /(?:PREFIX|BASE|VERSION|GRAPH)(?=[\s#<"'])/iy;
+    this._undef = /undef(?=[\s#()])/iy; // the empty slot of a sequence (rdf-undef); the parser takes it only there
     this._n3Verb = /(?:has|is|of)(?=[\s#()\[\]\{\}"'<>?_+\-0-9])/y;
     this._n3Id = /id(?=[\s#<])/y;
     this._shortPredicates = /a(?=[\s#()\[\]\{\}"'<>])/y;
@@ -523,6 +525,15 @@ export default class N3Lexer {
         // Try to find a SPARQL-style keyword
         if (match = execAt(this._keyword, input, pos))
           type = match[0].toUpperCase();
+        else
+          inconclusive = true;
+        break;
+
+      case 'U':
+      case 'u':
+        // Try to find the empty slot of a sequence (rdf-undef)
+        if (testAt(this._undef, input, pos))
+          type = 'undef', matchLength = 5;
         else
           inconclusive = true;
         break;

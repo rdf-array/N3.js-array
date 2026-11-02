@@ -1,6 +1,6 @@
 import {
-  Sequence, Quad,
-  Store, Writer, Parser, Util, DataFactory,
+  Sequence, Undef, Quad,
+  Store, StreamParser, Writer, Parser, Util, DataFactory,
   termFromId, termToId,
 } from '../src';
 
@@ -271,6 +271,140 @@ describe('Sequence', () => {
     it('should not produce rdf:first or rdf:rest', () => {
       const quads = parse('<a> <b> (1 (2 3) [ <p> (4) ]).');
       expect(quads.some(q => q.predicate.value.endsWith('#first') || q.predicate.value.endsWith('#rest'))).toBe(false);
+    });
+  });
+
+  describe('rdf-undef: the empty slot', () => {
+    const { undef, variable } = DataFactory;
+    const s = namedNode('http://example.org/s'), p = namedNode('http://example.org/p');
+    const one = literal('1', namedNode('http://www.w3.org/2001/XMLSchema#integer'));
+    const PREFIX = 'PREFIX : <http://example.org/>\n';
+    function parse(text, format) {
+      return new Parser({ format }).parse(text);
+    }
+    function objectOf(text, format) {
+      return parse(text, format)[0].object;
+    }
+
+    it('should be one object, an element and not a value', () => {
+      expect(undef()).toBe(undef());
+      expect(undef()).toBeInstanceOf(Undef);
+      expect(undef().termType).toBe('Undef');
+      expect(undef().value).toBe('undef');
+      expect(undef().equals(undef())).toBe(true);
+      expect(undef().equals({ termType: 'Undef', value: 'undef' })).toBe(true);
+      expect(undef().equals(namedNode('undef'))).toBe(false);
+      expect(namedNode('undef').equals(undef())).toBe(false);
+      expect(Util.isUndef(undef())).toBe(true);
+      expect(Util.isUndef(s)).toBe(false);
+      expect(Util.isUndef(null)).toBe(false);
+    });
+
+    it('should be refused by a quad at every position', () => {
+      for (const args of [[undef(), p, s], [s, undef(), s], [s, p, undef()], [s, p, s, undef()]])
+        expect(() => quad(...args)).toThrow('undef is only a member of a sequence');
+    });
+
+    it('should count in length and equality, and spell undef', () => {
+      const seq = sequence([one, undef()]);
+      expect(seq.length).toBe(2);
+      expect(seq.value).toBe('("1"^^<http://www.w3.org/2001/XMLSchema#integer> undef)');
+      expect(seq.equals(sequence([one, undef()]))).toBe(true);
+      expect(seq.equals(sequence([one]))).toBe(false);
+      expect(seq.equals(sequence([undef(), one]))).toBe(false);
+      expect(seq.equals(sequence([one, one]))).toBe(false);
+      expect(seq.equals({ termType: 'Sequence', elements: [one, { termType: 'Undef', value: 'undef', equals: () => true }] })).toBe(true);
+    });
+
+    it('should round trip through ids, and from another library', () => {
+      const seq = sequence([undef(), sequence([undef()])]);
+      expect(termFromId(termToId(seq)).equals(seq)).toBe(true);
+      const factory = { sequence: elements => elements, undef: () => 'slot', defaultGraph: () => null };
+      expect(termFromId(termToId(sequence([undef()])), factory)).toEqual(['slot']);
+      expect(termFromId(termToId(sequence([undef()])), { sequence: elements => elements })).toEqual([undef()]);
+      expect(termToId({ termType: 'Undef', value: 'undef' })).toBe('!undef');
+      expect(DataFactory.fromTerm({ termType: 'Undef', value: 'undef' })).toBe(undef());
+      expect(DataFactory.fromTerm({ termType: 'Sequence', elements: [{ termType: 'Undef', value: 'undef' }] }).equals(sequence([undef()]))).toBe(true);
+    });
+
+    it('should be read in any case, at any depth', () => {
+      expect(objectOf(`${PREFIX}:s :p (1 UNDEF Undef undef) .`).elements.map(e => e.termType))
+        .toEqual(['Literal', 'Undef', 'Undef', 'Undef']);
+      expect(parse(`${PREFIX}(undef (undef 1)) :p 2 .`)[0].subject.elements[1].elements[0]).toBe(undef());
+      expect(objectOf(`${PREFIX}:s :p (undef(undef)undef) .`).value).toBe('(undef (undef) undef)');
+    });
+
+    it('should read undef:x as a prefixed name', () => {
+      const e = objectOf('PREFIX undef: <http://example.org/>\nundef:s undef:p (undef:o undef undef:) .').elements;
+      expect(e[0].value).toBe('http://example.org/o');
+      expect(e[1]).toBe(undef());
+      expect(e[2].value).toBe('http://example.org/');
+    });
+
+    it('should be read in N-Triples and N-Quads', () => {
+      expect(objectOf('<http://s> <http://p> ( "a" undef ( UNDEF ) ) .', 'application/n-triples').value).toBe('("a" undef (undef))');
+      const [q] = parse('<http://s> <http://p> ( undef ) <http://g> .', 'application/n-quads');
+      expect(q.object.elements[0]).toBe(undef());
+      expect(q.graph.value).toBe('http://g');
+    });
+
+    it('should be read split across chunks', async () => {
+      const quads = [];
+      const parser = new StreamParser();
+      parser.on('data', q => quads.push(q));
+      const ended = new Promise(resolve => parser.on('end', resolve));
+      parser.write(`${PREFIX}:s :p (un`);
+      parser.write('def');
+      parser.write(' ) .');
+      parser.end();
+      await ended;
+      expect(quads[0].object.elements[0]).toBe(undef());
+    });
+
+    it('should not be read outside a sequence', () => {
+      for (const text of [':s :p undef .', 'undef :p 1 .', ':s undef :o .', ':s :p (1) , undef .', ':s :p ( [ :q undef ] ) .', ':s :p ( undefined ) .', ':s :p undef'])
+        expect(() => parse(PREFIX + text)).toThrow();
+      expect(() => parse('<http://s> <http://p> undef .', 'application/n-triples')).toThrow();
+      expect(() => parse('undef <http://p> <http://o> .', 'application/n-triples')).toThrow();
+      expect(() => parse('<http://s> undef <http://o> .', 'application/n-triples')).toThrow();
+      expect(() => parse('<http://s> <http://p> <http://o> undef .', 'application/n-quads')).toThrow();
+      expect(() => parse(`${PREFIX}undef { :s :p :o }`, 'application/trig')).toThrow();
+    });
+
+    it('should use a parser factory\'s undef, or the default one', () => {
+      const factory = { ...DataFactory, undef: () => 'slot', sequence: elements => ({ termType: 'Sequence', elements }) };
+      const without = { ...DataFactory, undef: undefined };
+      expect(new Parser({ factory }).parse(`${PREFIX}:s :p (undef) .`)[0]).toBeDefined();
+      expect(new Parser({ factory: without }).parse(`${PREFIX}:s :p (undef) .`)[0].object.elements[0]).toBe(undef());
+    });
+
+    it('should be written, and read back', () => {
+      const data = quad(s, p, sequence([one, undef(), sequence([undef()])]));
+      for (const format of ['text/turtle', 'application/trig', 'application/n-triples', 'application/n-quads']) {
+        const writer = new Writer({ format });
+        let text;
+        writer.addQuad(data);
+        writer.end((e, r) => { text = r; });
+        expect(text).toContain('undef');
+        expect(parse(text, format)[0].object.equals(data.object)).toBe(true);
+      }
+    });
+
+    it('should be written by writer.list', () => {
+      expect(new Writer().list([one, undef()]).id).toBe('(1 undef)');
+    });
+
+    it('should not be written outside a sequence', () => {
+      expect(() => new Writer().quadToString(s, p, undef())).toThrow();
+    });
+
+    it('should be held in a store', () => {
+      const store = new Store();
+      store.addQuad(quad(s, p, sequence([one, undef()])));
+      expect(store.getQuads(s, p, sequence([one, undef()]))).toHaveLength(1);
+      expect(store.getQuads(s, p, sequence([one, one]))).toHaveLength(0);
+      expect(store.getQuads(s, p, null)[0].object.elements[1]).toBe(undef());
+      expect(variable('undef').termType).toBe('Variable');
     });
   });
 });

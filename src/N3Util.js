@@ -22,6 +22,11 @@ export function isVariable(term) {
   return !!term && term.termType === 'Variable';
 }
 
+// Tests whether the given element of a sequence is the empty slot (rdf-undef)
+export function isUndef(term) {
+  return !!term && term.termType === 'Undef';
+}
+
 // Tests whether the given term represents a quad
 export function isSequence(term) {
   return !!term && term.termType === 'Sequence';
