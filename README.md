@@ -36,7 +36,10 @@ DataFactory.sequence([DataFactory.literal(1), DataFactory.literal(2)]).equals(
   [rdf-tests-contrib](https://github.com/rdf-array/rdf-tests-contrib) Turtle, TriG, N-Triples and N-Quads
   tests, through the parser and a write round trip, with
   [rdf-test-suite-array](https://github.com/rdf-array/rdf-test-suite-array), which reads and compares
-  sequences; `scripts/fetch-rdf-array-tests.sh` fetches both suites. Every suite passes; the N3 suite's
+  sequences; `scripts/fetch-rdf-array-tests.sh` fetches both suites, and `npm run spec` installs the
+  runner on first use. It is no devDependency: a git install of n3 builds the devDependencies too, and
+  the runner, which depends on the rdf-array forks, would make every `npm install` of n3 build the
+  whole family. Every suite passes; the N3 suite's
   `path2.n3`, whose expectation is a ladder, is skipped.
 
 ---
